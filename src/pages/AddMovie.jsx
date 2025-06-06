@@ -6,12 +6,13 @@ import { addMovie } from '../redux/moviesSlice';
 export default function AddMovie() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  
-  // Accès aux données Redux - IMPORTANT: vérifier que movies contient bien les films existants
+
+  // Accéder aux données Redux
   const { addedMovies, movies } = useSelector(state => state.movies);
-  // Combiner tous les films (API + ajoutés manuellement)
+
+  // Combiner tous les films (API + ajoutés manuellement).
   const allMovies = [...(movies || []), ...(addedMovies || [])];
-  
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
@@ -25,13 +26,12 @@ export default function AddMovie() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Fonction pour convertir les minutes en format "2h 18min"
   const formatDuration = (minutes) => {
     if (!minutes) return "";
-    
+
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (hours === 0) {
       return `${remainingMinutes}min`;
     } else if (remainingMinutes === 0) {
@@ -41,36 +41,27 @@ export default function AddMovie() {
     }
   };
 
-  // Fonction améliorée pour vérifier les doublons
-  const checkForDuplicates = (newTitle, newImageBase64 = null) => {
-    // Normaliser le titre pour la comparaison
+  const checkForTitleDuplicate = (newTitle) => {
     const normalizedNewTitle = newTitle.trim().toLowerCase().replace(/\s+/g, ' ');
-    
-    console.log('Vérification des doublons pour:', normalizedNewTitle);
-    console.log('Nombre total de films à vérifier:', allMovies.length);
-    
+
+    console.log('Checking for title duplicate:', normalizedNewTitle);
+    console.log('Total movies to check:', allMovies.length);
+
     return allMovies.some(movie => {
-      // Vérifier le titre exactement
       const normalizedExistingTitle = movie.title.trim().toLowerCase().replace(/\s+/g, ' ');
-      
-      console.log('Comparaison:', normalizedExistingTitle, '===', normalizedNewTitle);
-      
-      if (normalizedExistingTitle === normalizedNewTitle) {
-        console.log('DOUBLON DÉTECTÉ: Titre identique trouvé!');
-        return true;
-      }
-      
-      // Vérifier l'image uniquement pour les films personnalisés
-      if (newImageBase64 && movie.isCustom && movie.poster_path === newImageBase64) {
-        console.log('DOUBLON DÉTECTÉ: Image identique trouvée!');
-        return true;
-      }
-      
-      return false;
+      return normalizedExistingTitle === normalizedNewTitle;
     });
   };
 
-  // Charger la liste des genres au montage du composant
+  // ⚠️ Cette fonction est maintenue pour la complétude, mais n'est plus appelée
+  // pour afficher un message d'erreur si vous la supprimez du handleSubmit et handleImageChange.
+  // Si vous souhaitez la supprimer complètement, vous pouvez le faire.
+  const checkForImageDuplicate = (newImageBase64) => {
+    console.log('Checking for Base64 image duplicate against all movies...');
+    return allMovies.some(movie => movie.poster_path === newImageBase64);
+  };
+
+
   useEffect(() => {
     const fetchGenres = async () => {
       try {
@@ -104,30 +95,39 @@ export default function AddMovie() {
     fetchGenres();
   }, []);
 
-  // Vérifier les doublons en temps réel quand le titre change
   useEffect(() => {
-    if (title.trim().length >= 2) { // Vérifier seulement si au moins 2 caractères
-      const isDuplicate = checkForDuplicates(title);
-      
+    // Le message d'erreur lié à l'image n'est plus vérifié ici, car il est supprimé
+    if (error && !error.includes("title already exists")) { // Modifié pour ne pas vérifier l'erreur d'image ici
+      setError("");
+    }
+
+    if (title.trim().length >= 2) {
+      const isDuplicate = checkForTitleDuplicate(title);
       if (isDuplicate) {
-        setError("⚠️ Un film avec ce titre existe déjà dans votre collection!");
-      } else if (error.includes("titre existe déjà") || error.includes("title already exists")) {
-        setError(""); // Effacer l'erreur si le titre n'est plus en double
+        setError("⚠️ Un film avec ce titre existe déjà dans votre collection !");
+      } else {
+        if (error.includes("title already exists")) {
+            setError("");
+        }
       }
-    } else if (error.includes("titre existe déjà") || error.includes("title already exists")) {
-      setError(""); // Effacer l'erreur si le titre est trop court
     }
   }, [title, allMovies, error]);
 
   const handleImageChange = (e) => {
+    setError(""); // Effacer les erreurs précédentes lors de la sélection d'une nouvelle image
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+        setImage(null);
+        setImageName("No file chosen");
+        setImagePreview(null);
+        return;
+    }
 
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
     const maxSize = 3 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
-      setError("❌ Format invalide. Utilisez .png ou .jpg");
+      setError("❌ Format invalide. Veuillez utiliser .png ou .jpg");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -135,7 +135,7 @@ export default function AddMovie() {
     }
 
     if (file.size > maxSize) {
-      setError("❌ Image trop volumineuse (max 3 MB).");
+      setError("❌ Image trop grande (max 3 Mo).");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -144,107 +144,105 @@ export default function AddMovie() {
 
     setImage(file);
     setImageName(file.name);
-    
-    // Effacer les erreurs de format/taille
-    if (error.includes("Format invalide") || error.includes("trop volumineuse")) {
-      setError("");
-    }
 
     const reader = new FileReader();
     reader.onload = () => {
-      setImagePreview(reader.result);
-      
-      // Vérifier si cette image existe déjà (seulement pour les films personnalisés)
-      const isDuplicateImage = allMovies.some(movie => 
-        movie.isCustom && movie.poster_path === reader.result
-      );
-      
-      if (isDuplicateImage) {
-        setError("⚠️ Cette image est déjà utilisée par un autre film de votre collection!");
-      } else if (error.includes("image est déjà utilisée")) {
-        setError("");
-      }
+      const imageBase64 = reader.result;
+      setImagePreview(imageBase64);
+      // ⚠️ La vérification de doublon d'image en temps réel a été retirée ici
+      // pour permettre l'ajout même si le poster est le même.
     };
     reader.readAsDataURL(file);
   };
 
   const handleGenreToggle = (genreId) => {
-    setSelectedGenres(prev => 
-      prev.includes(genreId) 
+    setSelectedGenres(prev =>
+      prev.includes(genreId)
         ? prev.filter(id => id !== genreId)
         : [...prev, genreId]
     );
+    if (selectedGenres.length === 0 && error.includes("select at least one genre")) {
+        setError("");
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError("");
+    setMessage("");
 
-    // Validation des champs obligatoires
     if (!title.trim()) {
-      setError("❗ Le titre du film est obligatoire.");
+      setError("❗ Le titre du film est requis.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!description.trim()) {
-      setError("❗ La description du film est obligatoire.");
+      setError("❗ La description du film est requise.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!releaseDate) {
-      setError("❗ La date de sortie est obligatoire.");
+      setError("❗ La date de sortie est requise.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!duration) {
-      setError("❗ La durée du film est obligatoire.");
+      setError("❗ La durée du film est requise.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    
+    if (selectedGenres.length === 0) {
+      setError("❗ Veuillez sélectionner au moins un genre.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!image) {
       setError("❗ Veuillez choisir une image pour le film.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    if (selectedGenres.length === 0) {
-      setError("❗ Veuillez sélectionner au moins un genre.");
-      return;
+    if (checkForTitleDuplicate(title)) {
+        setError("🚫 Un film avec ce titre existe déjà dans votre collection !");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
     }
+
 
     const reader = new FileReader();
     reader.onload = () => {
       const imageBase64 = reader.result;
-      
-      // VÉRIFICATION CRITIQUE: Vérifier les doublons avant l'ajout
-      if (checkForDuplicates(title, imageBase64)) {
-        setError("🚫 Ce film existe déjà dans votre collection! Vérifiez le titre ou choisissez une image différente.");
-        return;
-      }
 
-      // Créer le nouvel objet film
+      // ⚠️ La vérification de doublon d'image avant l'ajout a été retirée ici.
+      // Le film sera ajouté même si l'image est un doublon.
+      
       const newMovie = {
-        id: Date.now(), // ID unique basé sur timestamp
+        id: Date.now(),
         title: title.trim(),
         overview: description.trim(),
         release_date: releaseDate,
         runtime: parseInt(duration),
         genre_ids: selectedGenres,
         vote_average: rating ? parseFloat(rating) : 0,
-        poster_path: imageBase64, // Image en base64
+        poster_path: imageBase64,
         backdrop_path: imageBase64,
         created_at: new Date().toISOString(),
-        isCustom: true // Flag pour identifier les films ajoutés manuellement
+        isCustom: true
       };
 
       try {
-        console.log('Ajout du film:', newMovie.title);
-        
-        // Utiliser Redux pour sauvegarder le film
+        console.log('Attempting to add movie:', newMovie.title);
+
         dispatch(addMovie(newMovie));
-        
-        setMessage("✅ Film ajouté avec succès!");
+
+        setMessage("✅ Film ajouté avec succès !");
         setError("");
 
-        // Réinitialiser le formulaire
         setTitle("");
         setDescription("");
         setReleaseDate("");
@@ -255,17 +253,17 @@ export default function AddMovie() {
         setImageName("No file chosen");
         setImagePreview(null);
 
-        // Rediriger vers la page d'accueil après 2 secondes
         setTimeout(() => {
           setMessage("🎬 Redirection vers l'accueil...");
           setTimeout(() => {
             navigate('/');
           }, 1000);
         }, 2000);
-        
-      } catch (error) {
-        console.error('Erreur lors de la sauvegarde:', error);
-        setError("❌ Erreur lors de la sauvegarde. Veuillez réessayer.");
+
+      } catch (saveError) {
+        console.error('Error saving movie:', saveError);
+        setError("❌ Erreur lors de la sauvegarde du film. Veuillez réessayer.");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
 
@@ -293,12 +291,12 @@ export default function AddMovie() {
 
       <div className="m-10 w-full max-w-screen-xl mx-auto relative z-10">
         <div className="flex flex-col lg:flex-row gap-8">
-          
-          {/* Formulaire principal */}
+
+          {/* Main Form */}
           <div className="flex-1">
             <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-gray-800/50 to-gray-900/80 backdrop-blur-xl p-8 shadow-2xl shadow-purple-500/10">
-              
-              {/* Titre principal avec glassmorphism effect */}
+
+              {/* Main title with glassmorphism effect */}
               <div className="text-center mb-8">
                 <div className="inline-block p-6 rounded-xl backdrop-blur-md bg-slate-800/30 border border-slate-700/50 shadow-2xl">
                   <div className="flex items-center justify-center gap-3 mb-2">
@@ -311,20 +309,20 @@ export default function AddMovie() {
                   <p className="text-slate-300">
                     Expand your movie collection with style
                   </p>
-                  {/* Afficher le nombre total de films */}
+                  {/* Display total number of movies */}
                   <p className="text-sm text-purple-300 mt-2">
-                    {allMovies.length} films dans votre collection
+                    {allMovies.length} movies in your collection
                   </p>
                 </div>
               </div>
 
-              {/* Messages d'erreur et de succès */}
+              {/* Error and Success Messages */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-500/30 backdrop-blur-sm animate-pulse">
                   <p className="text-red-200 text-sm font-medium">{error}</p>
                 </div>
               )}
-              
+
               {message && (
                 <div className="mb-6 p-4 rounded-xl bg-green-500/20 border border-green-500/30 backdrop-blur-sm animate-pulse">
                   <p className="text-green-200 text-sm font-medium">{message}</p>
@@ -332,11 +330,11 @@ export default function AddMovie() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-8">
-                
-                {/* Grille des champs principaux */}
+
+                {/* Grid for main fields */}
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-                  
-                  {/* Titre du film */}
+
+                  {/* Movie Title */}
                   <div className="flex flex-col group lg:col-span-2">
                     <label htmlFor="title" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">🎭</span>
@@ -350,8 +348,8 @@ export default function AddMovie() {
                       placeholder="e.g. Inception"
                       required
                       className={`block w-full rounded-xl border px-4 py-3 shadow-lg outline-none text-white placeholder-gray-400 transition-all duration-300 ${
-                        error.includes("titre existe déjà") || error.includes("title already exists")
-                          ? 'border-red-500/50 bg-red-900/20 focus:border-red-400 focus:ring-2 focus:ring-red-400/30' 
+                        error.includes("title already exists")
+                          ? 'border-red-500/50 bg-red-900/20 focus:border-red-400 focus:ring-2 focus:ring-red-400/30'
                           : 'border-purple-500/30 bg-gray-800/60 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80'
                       }`}
                     />
@@ -376,7 +374,7 @@ export default function AddMovie() {
                     />
                   </div>
 
-                  {/* Date de sortie */}
+                  {/* Release Date */}
                   <div className="flex flex-col group">
                     <label htmlFor="releaseDate" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">📅</span>
@@ -392,7 +390,7 @@ export default function AddMovie() {
                     />
                   </div>
 
-                  {/* Durée */}
+                  {/* Duration */}
                   <div className="flex flex-col group">
                     <label htmlFor="duration" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">⏱️</span>
@@ -411,7 +409,7 @@ export default function AddMovie() {
                   </div>
                 </div>
 
-                {/* Description - pleine largeur */}
+                {/* Description - full width */}
                 <div className="flex flex-col group">
                   <label htmlFor="description" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">📝</span>
@@ -428,7 +426,7 @@ export default function AddMovie() {
                   />
                 </div>
 
-                {/* Sélection des genres */}
+                {/* Genre Selection */}
                 <div className="flex flex-col group">
                   <label className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">🎪</span>
@@ -462,26 +460,26 @@ export default function AddMovie() {
                   </div>
                 </div>
 
-                {/* Upload d'image */}
+                {/* Image Upload */}
                 <div className="flex flex-col group">
                   <label className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">🖼️</span>
                     Movie Poster *
                   </label>
-                  
+
                   <label
                     htmlFor="file-upload"
                     className={`flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-300 group ${
-                      error.includes("image est déjà utilisée") 
-                        ? 'border-red-500/50 bg-red-900/20 hover:bg-red-900/30' 
+                      error.includes("Invalid format") || error.includes("too large")
+                        ? 'border-red-500/50 bg-red-900/20 hover:bg-red-900/30'
                         : 'border-purple-500/30 bg-gray-800/30 hover:bg-gray-800/50'
                     }`}
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <svg
                         className={`w-10 h-10 mb-3 transition-colors ${
-                          error.includes("image est déjà utilisée") 
-                            ? 'text-red-400 group-hover:text-red-300' 
+                          error.includes("Invalid format") || error.includes("too large")
+                            ? 'text-red-400 group-hover:text-red-300'
                             : 'text-purple-400 group-hover:text-purple-300'
                         }`}
                         fill="none"
@@ -511,7 +509,7 @@ export default function AddMovie() {
                   </label>
                 </div>
 
-                {/* Boutons d'action */}
+                {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-end pt-4">
                   <button
                     type="button"
@@ -522,9 +520,10 @@ export default function AddMovie() {
                   </button>
                   <button
                     type="submit"
-                    disabled={error && (error.includes("existe déjà") || error.includes("déjà utilisée") || error.includes("already exists") || error.includes("already used"))}
+                    // Désactiver le bouton si une erreur de titre dupliqué ou des erreurs de validation sont présentes
+                    disabled={!!error || !title.trim() || !description.trim() || !releaseDate || !duration || !image || selectedGenres.length === 0}
                     className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl ${
-                      error && (error.includes("existe déjà") || error.includes("déjà utilisée") || error.includes("already exists") || error.includes("already used"))
+                        (!!error || !title.trim() || !description.trim() || !releaseDate || !duration || !image || selectedGenres.length === 0)
                         ? 'bg-gray-600/50 text-gray-400 cursor-not-allowed'
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-purple-500/25'
                     }`}
@@ -536,7 +535,7 @@ export default function AddMovie() {
             </div>
           </div>
 
-          {/* Panneau de prévisualisation */}
+          {/* Preview Panel */}
           <div className="lg:w-80">
             <div className="sticky top-28">
               <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-gray-800/50 to-gray-900/80 backdrop-blur-xl p-6 shadow-2xl shadow-purple-500/10">
@@ -544,14 +543,14 @@ export default function AddMovie() {
                   <span className="text-2xl">👁️</span>
                   Preview
                 </h3>
-                
-                {/* Prévisualisation de l'image */}
+
+                {/* Image Preview */}
                 <div className="mb-4">
                   <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-700/50 border border-gray-600/30">
                     {imagePreview ? (
-                      <img 
-                        src={imagePreview} 
-                        alt="Preview" 
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -565,14 +564,14 @@ export default function AddMovie() {
                   </div>
                 </div>
 
-                {/* Infos du film */}
+                {/* Movie Info */}
                 <div className="space-y-3">
                   <div>
                     <h4 className="text-white font-semibold">
                       {title || "Movie Title"}
                     </h4>
                   </div>
-                  
+
                   <div className="flex items-center gap-4 text-sm">
                     {rating && (
                       <span className="flex items-center gap-1 text-yellow-400">
@@ -594,17 +593,14 @@ export default function AddMovie() {
 
                   {selectedGenres.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {selectedGenres.map((genreId) => {
-                        const genre = genres.find(g => g.id === genreId);
-                        return genre ? (
+                      {genres.filter(g => selectedGenres.includes(g.id)).map((genre) => (
                           <span
-                            key={genreId}
+                            key={genre.id}
                             className="px-2 py-1 bg-purple-600/50 text-purple-200 text-xs rounded-full"
                           >
                             {genre.name}
                           </span>
-                        ) : null;
-                      })}
+                        ))}
                     </div>
                   )}
 

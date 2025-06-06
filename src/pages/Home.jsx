@@ -28,8 +28,13 @@ export default function Home() {
           allResults.push(...res.data.results);
         }
 
-        // Fusionner les films ajoutés manuellement avec ceux de l'API
-        setMovies([...addedMovies, ...allResults]);
+        // --- C'EST LA LIGNE CLÉ MODIFIÉE ---
+        // Inverse addedMovies pour que le plus récent soit en premier
+        const sortedAddedMovies = [...addedMovies].reverse(); 
+        setMovies([...sortedAddedMovies, ...allResults]);
+        // --- FIN DE LA MODIFICATION ---
+
+        setCurrentPage(1); // Réinitialiser à la première page pour voir le nouveau film
       } catch (err) {
         console.error(err);
       }

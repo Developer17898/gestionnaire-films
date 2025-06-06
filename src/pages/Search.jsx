@@ -10,12 +10,13 @@ export default function Search() {
   const [query, setQuery] = useState("");
   const [exactYear, setExactYear] = useState("");
   const [minRating, setMinRating] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState("");
+  // selectedGenres remains an array to hold multiple genre IDs
+  const [selectedGenres, setSelectedGenres] = useState([]);
   const [genres, setGenres] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Charger la liste des genres au montage du composant
+  // Load the list of genres on component mount
   useEffect(() => {
     const fetchGenres = async () => {
       try {
@@ -32,7 +33,8 @@ export default function Search() {
   }, []);
 
   const handleSearch = async () => {
-    if (!query.trim()) {
+    // Check if no query and no filters, clear results
+    if (!query.trim() && !exactYear && !minRating && selectedGenres.length === 0) {
       dispatch(setSearchResults([]));
       setHasSearched(false);
       return;
@@ -42,56 +44,73 @@ export default function Search() {
     setHasSearched(true);
 
     try {
-      let searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${import.meta.env.VITE_TMDB_API_KEY}&query=${query}`;
-      
-      // Si un genre est sélectionné, utiliser discover au lieu de search
-      if (selectedGenre) {
-        searchUrl = `https://api.themoviedb.org/3/discover/movie?api_key=${import.meta.env.VITE_TMDB_API_KEY}&with_genres=${selectedGenre}`;
+      let apiResults = [];
+
+      // Step 1: Determine the base API call
+      if (query.trim()) {
+        // If query is present, always start with a search API call
+        const searchRes = await axios.get(
+          `https://api.themoviedb.org/3/search/movie?api_key=${import.meta.env.VITE_TMDB_API_KEY}&query=${query}`
+        );
+        apiResults = searchRes.data.results;
+      } else if (selectedGenres.length > 0 || exactYear || minRating) {
+        // If no query but filters are present, use discover API
+        let discoverUrl = `https://api.themoviedb.org/3/discover/movie?api_key=${import.meta.env.VITE_TMDB_API_KEY}`;
         
-        // Ajouter les autres filtres à l'URL discover
+        // Add selected genres (comma-separated for TMDB API's 'OR' logic)
+        if (selectedGenres.length > 0) {
+          discoverUrl += `&with_genres=${selectedGenres.join(',')}`;
+        }
         if (exactYear) {
-          searchUrl += `&year=${exactYear}`;
+          discoverUrl += `&primary_release_year=${exactYear}`;
         }
         if (minRating) {
-          searchUrl += `&vote_average.gte=${minRating}`;
+          discoverUrl += `&vote_average.gte=${minRating}`;
         }
+        const discoverRes = await axios.get(discoverUrl);
+        apiResults = discoverRes.data.results;
       }
 
-      const res = await axios.get(searchUrl);
 
+      // Combine API results with manually added movies
       let combined = [
         ...addedMovies.filter(m =>
-          m.title.toLowerCase().includes(query.toLowerCase())
+          // Filter added movies by query, year, rating, and ALL selected genres (if any)
+          (query.trim() ? m.title.toLowerCase().includes(query.toLowerCase()) : true) &&
+          (exactYear ? (m.release_date && m.release_date.slice(0, 4) === exactYear) : true) &&
+          (minRating ? (m.vote_average >= parseFloat(minRating)) : true) &&
+          // Check if movie has ANY of the selected genres
+          (selectedGenres.length > 0 ? 
+             (m.genre_ids && selectedGenres.some(genreId => m.genre_ids.includes(parseInt(genreId)))) : true)
         ),
-        ...res.data.results
+        ...apiResults
       ];
 
-      // Appliquer les filtres manuellement si on utilise search (pas discover)
-      if (!selectedGenre) {
-        // Filtrer par année exacte
+      // Apply additional filters to API results if a query was used (as search API doesn't support them)
+      if (query.trim()) { 
+        // Filter by exact year
         if (exactYear) {
           combined = combined.filter(m => 
             m.release_date && m.release_date.slice(0, 4) === exactYear
           );
         }
 
-        // Filtrer par note minimale
+        // Filter by minimum rating
         if (minRating) {
           combined = combined.filter(m => 
             m.vote_average >= parseFloat(minRating)
           );
         }
+
+        // Filter by selected genres (if query was used)
+        if (selectedGenres.length > 0) {
+          combined = combined.filter(m => 
+            m.genre_ids && selectedGenres.some(genreId => m.genre_ids.includes(parseInt(genreId)))
+          );
+        }
       }
 
-      // Filtrer par genre si sélectionné (pour les films ajoutés manuellement)
-      if (selectedGenre && addedMovies.length > 0) {
-        const genreId = parseInt(selectedGenre);
-        combined = combined.filter(m => 
-          !addedMovies.includes(m) || (m.genre_ids && m.genre_ids.includes(genreId))
-        );
-      }
-
-      // Supprimer les doublons basés sur l'ID
+      // Remove duplicates based on ID
       const uniqueMovies = combined.filter((movie, index, self) => 
         index === self.findIndex(m => m.id === movie.id)
       );
@@ -109,19 +128,36 @@ export default function Search() {
     setQuery("");
     setExactYear("");
     setMinRating("");
-    setSelectedGenre("");
+    setSelectedGenres([]); // Reset to empty array
     setHasSearched(false);
     setIsLoading(false);
     dispatch(setSearchResults([]));
   };
 
+  // Ensure results are cleared when all inputs are empty
   useEffect(() => {
-    if (query.trim() === "") {
+    if (query.trim() === "" && !exactYear && !minRating && selectedGenres.length === 0) {
       dispatch(setSearchResults([]));
       setHasSearched(false);
       setIsLoading(false);
     }
-  }, [query]);
+  }, [query, exactYear, minRating, selectedGenres]); // Add all filter dependencies here
+
+  // NEW: Helper function to handle individual checkbox changes
+  const handleGenreCheckboxChange = (e) => {
+    const genreId = e.target.value;
+    const isChecked = e.target.checked;
+
+    setSelectedGenres((prevSelectedGenres) => {
+      if (isChecked) {
+        // Add genreId if it's not already in the array
+        return [...prevSelectedGenres, genreId];
+      } else {
+        // Remove genreId from the array
+        return prevSelectedGenres.filter((id) => id !== genreId);
+      }
+    });
+  };
 
   return (
     <div className="pt-24 px-4 pb-16 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white relative overflow-hidden">
@@ -142,7 +178,7 @@ export default function Search() {
         <div className="flex flex-col">
           <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-gray-800/50 to-gray-900/80 backdrop-blur-xl p-8 shadow-2xl shadow-purple-500/10">
             
-            {/* Titre principal avec glassmorphism effect */}
+            {/* Main Title with glassmorphism effect */}
             <div className="text-center mb-8">
               <div className="inline-block p-6 rounded-xl backdrop-blur-md bg-slate-800/30 border border-slate-700/50 shadow-2xl">
                 <div className="flex items-center justify-center gap-3 mb-2">
@@ -159,7 +195,7 @@ export default function Search() {
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
-              {/* Barre de recherche principale avec style amélioré */}
+              {/* Main Search Bar */}
               <div className="relative mb-10 w-full">
                 <div className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-300"></div>
@@ -191,7 +227,7 @@ export default function Search() {
                 </div>
               </div>
 
-              {/* Section des filtres avec style amélioré */}
+              {/* Filters Section */}
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                   <span className="text-2xl">🎛️</span>
@@ -244,37 +280,36 @@ export default function Search() {
                     </div>
                   </div>
 
-                  {/* Genre */}
-                  <div className="flex flex-col group">
-                    <label htmlFor="genre" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
+                  {/* Genre - REPLACED WITH CHECKBOXES */}
+                  <div className="flex flex-col group lg:col-span-3"> {/* Span full width for better layout */}
+                    <label className="text-sm font-semibold text-purple-300 mb-3 flex items-center gap-2">
                       <span className="text-lg">🎪</span>
-                      Genre
+                      Select Genres
                     </label>
-                    <div className="relative">
-                      <select 
-                        id="genre"
-                        value={selectedGenre}
-                        onChange={(e) => setSelectedGenre(e.target.value)}
-                        className="block w-full rounded-xl border border-purple-500/30 bg-gray-800/60 px-4 py-3 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white transition-all duration-300 cursor-pointer appearance-none"
-                      >
-                        <option value="" className="bg-gray-800 text-white">All Genres</option>
+                    <div className="rounded-xl border border-purple-500/30 bg-gray-800/60 p-4 shadow-lg h-48 overflow-y-auto custom-scrollbar">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                         {genres.map((genre) => (
-                          <option key={genre.id} value={genre.id} className="bg-gray-800 text-white">
-                            {genre.name}
-                          </option>
+                          <div key={genre.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`genre-${genre.id}`}
+                              value={genre.id}
+                              checked={selectedGenres.includes(genre.id.toString())} // Ensure string comparison
+                              onChange={handleGenreCheckboxChange}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 rounded bg-gray-700 cursor-pointer"
+                            />
+                            <label htmlFor={`genre-${genre.id}`} className="ml-2 text-sm text-gray-200 cursor-pointer">
+                              {genre.name}
+                            </label>
+                          </div>
                         ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                        <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                        </svg>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Boutons d'action avec style amélioré */}
+              {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-end">
                 <button 
                   type="button"
@@ -312,7 +347,7 @@ export default function Search() {
         </div>
       </div>
 
-      {/* Results Section avec style amélioré */}
+      {/* Results Section */}
       <div className="max-w-7xl mx-auto mt-12 px-4">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
