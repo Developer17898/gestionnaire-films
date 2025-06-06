@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { addMovie } from '../redux/moviesSlice';
 
 export default function AddMovie() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  
+  // Accès aux données Redux - IMPORTANT: vérifier que movies contient bien les films existants
+  const { addedMovies, movies } = useSelector(state => state.movies);
+  // Combiner tous les films (API + ajoutés manuellement)
+  const allMovies = [...(movies || []), ...(addedMovies || [])];
+  
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
@@ -30,11 +41,39 @@ export default function AddMovie() {
     }
   };
 
+  // Fonction améliorée pour vérifier les doublons
+  const checkForDuplicates = (newTitle, newImageBase64 = null) => {
+    // Normaliser le titre pour la comparaison
+    const normalizedNewTitle = newTitle.trim().toLowerCase().replace(/\s+/g, ' ');
+    
+    console.log('Vérification des doublons pour:', normalizedNewTitle);
+    console.log('Nombre total de films à vérifier:', allMovies.length);
+    
+    return allMovies.some(movie => {
+      // Vérifier le titre exactement
+      const normalizedExistingTitle = movie.title.trim().toLowerCase().replace(/\s+/g, ' ');
+      
+      console.log('Comparaison:', normalizedExistingTitle, '===', normalizedNewTitle);
+      
+      if (normalizedExistingTitle === normalizedNewTitle) {
+        console.log('DOUBLON DÉTECTÉ: Titre identique trouvé!');
+        return true;
+      }
+      
+      // Vérifier l'image uniquement pour les films personnalisés
+      if (newImageBase64 && movie.isCustom && movie.poster_path === newImageBase64) {
+        console.log('DOUBLON DÉTECTÉ: Image identique trouvée!');
+        return true;
+      }
+      
+      return false;
+    });
+  };
+
   // Charger la liste des genres au montage du composant
   useEffect(() => {
     const fetchGenres = async () => {
       try {
-        // Simulation des genres pour la démo
         const mockGenres = [
           { id: 28, name: "Action" },
           { id: 12, name: "Adventure" },
@@ -65,6 +104,21 @@ export default function AddMovie() {
     fetchGenres();
   }, []);
 
+  // Vérifier les doublons en temps réel quand le titre change
+  useEffect(() => {
+    if (title.trim().length >= 2) { // Vérifier seulement si au moins 2 caractères
+      const isDuplicate = checkForDuplicates(title);
+      
+      if (isDuplicate) {
+        setError("⚠️ Un film avec ce titre existe déjà dans votre collection!");
+      } else if (error.includes("titre existe déjà") || error.includes("title already exists")) {
+        setError(""); // Effacer l'erreur si le titre n'est plus en double
+      }
+    } else if (error.includes("titre existe déjà") || error.includes("title already exists")) {
+      setError(""); // Effacer l'erreur si le titre est trop court
+    }
+  }, [title, allMovies, error]);
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -73,7 +127,7 @@ export default function AddMovie() {
     const maxSize = 3 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
-      setError("❌ Invalid format. Use .png or .jpg");
+      setError("❌ Format invalide. Utilisez .png ou .jpg");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -81,7 +135,7 @@ export default function AddMovie() {
     }
 
     if (file.size > maxSize) {
-      setError("❌ Image too large (max 3 MB).");
+      setError("❌ Image trop volumineuse (max 3 MB).");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -90,11 +144,26 @@ export default function AddMovie() {
 
     setImage(file);
     setImageName(file.name);
-    setError("");
+    
+    // Effacer les erreurs de format/taille
+    if (error.includes("Format invalide") || error.includes("trop volumineuse")) {
+      setError("");
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
       setImagePreview(reader.result);
+      
+      // Vérifier si cette image existe déjà (seulement pour les films personnalisés)
+      const isDuplicateImage = allMovies.some(movie => 
+        movie.isCustom && movie.poster_path === reader.result
+      );
+      
+      if (isDuplicateImage) {
+        setError("⚠️ Cette image est déjà utilisée par un autre film de votre collection!");
+      } else if (error.includes("image est déjà utilisée")) {
+        setError("");
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -107,46 +176,75 @@ export default function AddMovie() {
     );
   };
 
-  const saveToMemory = (newMovie) => {
-    try {
-      console.log('Movie saved:', newMovie);
-      return true;
-    } catch (error) {
-      console.error('Save error:', error);
-      return false;
-    }
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!title || !description || !releaseDate || !duration || !image || selectedGenres.length === 0) {
-      setError("❗Please fill in all fields, choose an image, and select at least one genre.");
+    // Validation des champs obligatoires
+    if (!title.trim()) {
+      setError("❗ Le titre du film est obligatoire.");
+      return;
+    }
+
+    if (!description.trim()) {
+      setError("❗ La description du film est obligatoire.");
+      return;
+    }
+
+    if (!releaseDate) {
+      setError("❗ La date de sortie est obligatoire.");
+      return;
+    }
+
+    if (!duration) {
+      setError("❗ La durée du film est obligatoire.");
+      return;
+    }
+
+    if (!image) {
+      setError("❗ Veuillez choisir une image pour le film.");
+      return;
+    }
+
+    if (selectedGenres.length === 0) {
+      setError("❗ Veuillez sélectionner au moins un genre.");
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
+      const imageBase64 = reader.result;
+      
+      // VÉRIFICATION CRITIQUE: Vérifier les doublons avant l'ajout
+      if (checkForDuplicates(title, imageBase64)) {
+        setError("🚫 Ce film existe déjà dans votre collection! Vérifiez le titre ou choisissez une image différente.");
+        return;
+      }
+
+      // Créer le nouvel objet film
       const newMovie = {
-        id: Date.now(),
+        id: Date.now(), // ID unique basé sur timestamp
         title: title.trim(),
         overview: description.trim(),
         release_date: releaseDate,
         runtime: parseInt(duration),
         genre_ids: selectedGenres,
         vote_average: rating ? parseFloat(rating) : 0,
-        poster_path: reader.result,
-        backdrop_path: reader.result,
+        poster_path: imageBase64, // Image en base64
+        backdrop_path: imageBase64,
         created_at: new Date().toISOString(),
-        isCustom: true
+        isCustom: true // Flag pour identifier les films ajoutés manuellement
       };
 
-      const saved = saveToMemory(newMovie);
-      
-      if (saved) {
-        setMessage("✅ Movie added successfully!");
+      try {
+        console.log('Ajout du film:', newMovie.title);
+        
+        // Utiliser Redux pour sauvegarder le film
+        dispatch(addMovie(newMovie));
+        
+        setMessage("✅ Film ajouté avec succès!");
         setError("");
 
+        // Réinitialiser le formulaire
         setTitle("");
         setDescription("");
         setReleaseDate("");
@@ -157,15 +255,25 @@ export default function AddMovie() {
         setImageName("No file chosen");
         setImagePreview(null);
 
+        // Rediriger vers la page d'accueil après 2 secondes
         setTimeout(() => {
-          setMessage("🎬 Redirecting to home...");
+          setMessage("🎬 Redirection vers l'accueil...");
+          setTimeout(() => {
+            navigate('/');
+          }, 1000);
         }, 2000);
-      } else {
-        setError("❌ Save error. Please try again.");
+        
+      } catch (error) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        setError("❌ Erreur lors de la sauvegarde. Veuillez réessayer.");
       }
     };
 
     reader.readAsDataURL(image);
+  };
+
+  const handleCancel = () => {
+    navigate('/');
   };
 
   return (
@@ -203,6 +311,10 @@ export default function AddMovie() {
                   <p className="text-slate-300">
                     Expand your movie collection with style
                   </p>
+                  {/* Afficher le nombre total de films */}
+                  <p className="text-sm text-purple-300 mt-2">
+                    {allMovies.length} films dans votre collection
+                  </p>
                 </div>
               </div>
 
@@ -219,7 +331,7 @@ export default function AddMovie() {
                 </div>
               )}
 
-              <div className="space-y-8">
+              <form onSubmit={handleSubmit} className="space-y-8">
                 
                 {/* Grille des champs principaux */}
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -228,7 +340,7 @@ export default function AddMovie() {
                   <div className="flex flex-col group lg:col-span-2">
                     <label htmlFor="title" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">🎭</span>
-                      Movie Title
+                      Movie Title *
                     </label>
                     <input
                       type="text"
@@ -236,7 +348,12 @@ export default function AddMovie() {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="e.g. Inception"
-                      className="block w-full rounded-xl border border-purple-500/30 bg-gray-800/60 px-4 py-3 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white placeholder-gray-400 transition-all duration-300"
+                      required
+                      className={`block w-full rounded-xl border px-4 py-3 shadow-lg outline-none text-white placeholder-gray-400 transition-all duration-300 ${
+                        error.includes("titre existe déjà") || error.includes("title already exists")
+                          ? 'border-red-500/50 bg-red-900/20 focus:border-red-400 focus:ring-2 focus:ring-red-400/30' 
+                          : 'border-purple-500/30 bg-gray-800/60 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80'
+                      }`}
                     />
                   </div>
 
@@ -263,13 +380,14 @@ export default function AddMovie() {
                   <div className="flex flex-col group">
                     <label htmlFor="releaseDate" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">📅</span>
-                      Release Date
+                      Release Date *
                     </label>
                     <input
                       type="date"
                       id="releaseDate"
                       value={releaseDate}
                       onChange={(e) => setReleaseDate(e.target.value)}
+                      required
                       className="block w-full rounded-xl border border-purple-500/30 bg-gray-800/60 px-4 py-3 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white transition-all duration-300"
                     />
                   </div>
@@ -278,7 +396,7 @@ export default function AddMovie() {
                   <div className="flex flex-col group">
                     <label htmlFor="duration" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                       <span className="text-lg">⏱️</span>
-                      Duration (minutes)
+                      Duration (minutes) *
                     </label>
                     <input
                       type="number"
@@ -287,6 +405,7 @@ export default function AddMovie() {
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
                       placeholder="e.g. 148"
+                      required
                       className="block w-full rounded-xl border border-purple-500/30 bg-gray-800/60 px-4 py-3 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white placeholder-gray-400 transition-all duration-300"
                     />
                   </div>
@@ -296,7 +415,7 @@ export default function AddMovie() {
                 <div className="flex flex-col group">
                   <label htmlFor="description" className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">📝</span>
-                    Description
+                    Description *
                   </label>
                   <textarea
                     id="description"
@@ -304,6 +423,7 @@ export default function AddMovie() {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Describe the movie plot, themes, and what makes it special..."
                     rows={4}
+                    required
                     className="block w-full rounded-xl border border-purple-500/30 bg-gray-800/60 px-4 py-3 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white placeholder-gray-400 transition-all duration-300 resize-none"
                   />
                 </div>
@@ -312,7 +432,7 @@ export default function AddMovie() {
                 <div className="flex flex-col group">
                   <label className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">🎪</span>
-                    Genres (Select multiple)
+                    Genres (Select at least one) *
                   </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4 rounded-xl border border-purple-500/30 bg-gray-800/30">
                     {genres.map((genre) => (
@@ -346,16 +466,24 @@ export default function AddMovie() {
                 <div className="flex flex-col group">
                   <label className="text-sm font-semibold text-purple-300 mb-3 group-focus-within:text-purple-200 transition-colors flex items-center gap-2">
                     <span className="text-lg">🖼️</span>
-                    Movie Poster
+                    Movie Poster *
                   </label>
                   
                   <label
                     htmlFor="file-upload"
-                    className="flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed border-purple-500/30 cursor-pointer bg-gray-800/30 hover:bg-gray-800/50 transition-all duration-300 group"
+                    className={`flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-300 group ${
+                      error.includes("image est déjà utilisée") 
+                        ? 'border-red-500/50 bg-red-900/20 hover:bg-red-900/30' 
+                        : 'border-purple-500/30 bg-gray-800/30 hover:bg-gray-800/50'
+                    }`}
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <svg
-                        className="w-10 h-10 mb-3 text-purple-400 group-hover:text-purple-300 transition-colors"
+                        className={`w-10 h-10 mb-3 transition-colors ${
+                          error.includes("image est déjà utilisée") 
+                            ? 'text-red-400 group-hover:text-red-300' 
+                            : 'text-purple-400 group-hover:text-purple-300'
+                        }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -387,20 +515,24 @@ export default function AddMovie() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-end pt-4">
                   <button
                     type="button"
-                    onClick={() => console.log('Navigate to home')}
+                    onClick={handleCancel}
                     className="px-8 py-3 rounded-xl bg-gray-700/80 hover:bg-gray-600/80 text-gray-200 font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg border border-gray-600/50"
                   >
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    onClick={handleSubmit}
-                    className="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl shadow-purple-500/25"
+                    type="submit"
+                    disabled={error && (error.includes("existe déjà") || error.includes("déjà utilisée") || error.includes("already exists") || error.includes("already used"))}
+                    className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl ${
+                      error && (error.includes("existe déjà") || error.includes("déjà utilisée") || error.includes("already exists") || error.includes("already used"))
+                        ? 'bg-gray-600/50 text-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-purple-500/25'
+                    }`}
                   >
                     🎬 Add Movie
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
 
