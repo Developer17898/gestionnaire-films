@@ -36,7 +36,7 @@ L'application offre les fonctionnalités suivantes :
 
 Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
 
-1. **Cloner le dépôt** (si hébergé sur GitHub, ce projet est privé selon la documentation, donc assurez-vous d'avoir les permissions nécessaires) :
+1. **Cloner le dépôt** :
 
    ```
    git clone VOTRE_LIEN_GITHUB_DU_PROJET
