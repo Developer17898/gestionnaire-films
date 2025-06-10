@@ -53,7 +53,17 @@ Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
    
    ```
 
-3. **Configuration de l'API TMDb** :
+3.  **Installer Tailwind CSS** :
+
+    Puisque votre configuration Tailwind CSS (`tailwind.config.js`, `postcss.config.js` et les directives dans `index.css`) est déjà en place, il vous suffit d'installer les paquets nécessaires :
+
+    ```bash
+    npm install -D tailwindcss postcss autoprefixer
+    # ou
+    yarn add -D tailwindcss postcss autoprefixer
+    ```
+
+4. **Configuration de l'API TMDb** :
 
    * Créez un compte sur [The Movie Database (TMDb)](https://www.themoviedb.org/).
 
@@ -70,7 +80,7 @@ Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
 
      Assurez-vous de remplacer `VOTRE_CLE_API_TMDB_ICI` par votre véritable clé API.
 
-4. **Lancer l'application en mode développement** :
+5. **Lancer l'application en mode développement** :
 
    ```
    npm run dev
@@ -105,6 +115,7 @@ Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
 │   └── index.css         # Fichier CSS global (probablement pour Tailwind CSS)
 └── .env                  # Fichier d'environnement pour les clés API
 └── README.md             # Ce fichier
+└── tailwind.config.js    # Fichier de configuration de Tailwind CSS
 
 ```
 
