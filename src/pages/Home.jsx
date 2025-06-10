@@ -1,47 +1,42 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import MovieCard from '../components/MovieCard';
 import Navbar from '../components/Navbar';
+import { fetchMovies } from '../redux/moviesSlice';
 
 export default function Home() {
-  const [movies, setMovies] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const { addedMovies } = useSelector(state => state.movies);
+  const dispatch = useDispatch();
+  // Retrieve API movies and manually added movies from the Redux store
+  const { movies: apiMovies, addedMovies, status, error } = useSelector(state => state.movies);
 
+  // Combine all movies for display (API movies + manually added movies)
+  // Reverse addedMovies so the most recent is first in the display
+  const allAvailableMovies = [...(addedMovies || [])].reverse().concat(apiMovies || []);
+
+  const [currentPage, setCurrentPage] = useState(1);
   const moviesPerPage = 9;
   const indexOfLastMovie = currentPage * moviesPerPage;
   const indexOfFirstMovie = indexOfLastMovie - moviesPerPage;
-  const currentMovies = movies.slice(indexOfFirstMovie, indexOfLastMovie);
-  const totalPages = Math.ceil(movies.length / moviesPerPage);
+  const currentMovies = allAvailableMovies.slice(indexOfFirstMovie, indexOfLastMovie);
+  const totalPages = Math.ceil(allAvailableMovies.length / moviesPerPage);
 
   useEffect(() => {
-    const fetchMovies = async () => {
-      try {
-        const pagesToFetch = [1, 2, 3];
-        const allResults = [];
+    // Dispatch the fetchMovies action on component mount if status is 'idle'
+    // This will trigger the loading of API movies into the Redux store.
+    if (status === 'idle') {
+      dispatch(fetchMovies());
+    }
+  }, [status, dispatch]); // Dependencies to ensure the effect is triggered correctly
 
-        for (const page of pagesToFetch) {
-          const res = await axios.get(
-            `https://api.themoviedb.org/3/movie/popular?api_key=${import.meta.env.VITE_TMDB_API_KEY}&page=${page}`
-          );
-          allResults.push(...res.data.results);
-        }
-
-        // --- C'EST LA LIGNE CLÉ MODIFIÉE ---
-        // Inverse addedMovies pour que le plus récent soit en premier
-        const sortedAddedMovies = [...addedMovies].reverse(); 
-        setMovies([...sortedAddedMovies, ...allResults]);
-        // --- FIN DE LA MODIFICATION ---
-
-        setCurrentPage(1); // Réinitialiser à la première page pour voir le nouveau film
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchMovies();
-  }, [addedMovies]); // important : recharger si un film est ajouté
+  // Handle case where `addedMovies` changes (a new movie is added)
+  // This will force re-calculation of `allAvailableMovies` and update the display
+  // but without re-fetching the API if API movies are already loaded.
+  useEffect(() => {
+    // This useEffect is necessary to recalculate `currentMovies` and `totalPages`
+    // when `addedMovies` changes.
+    // API fetching is already handled by `fetchMovies` dispatched once.
+    setCurrentPage(1); // Reset to the first page to see new movies
+  }, [addedMovies, apiMovies]); // Depends on addedMovies and apiMovies for updating
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -49,6 +44,23 @@ export default function Home() {
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }, 100);
   };
+
+  // Display loading/error states
+  if (status === 'loading') {
+    return (
+      <div className="pt-16 min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
+        <p className="text-xl animate-pulse">Loading movies...</p>
+      </div>
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <div className="pt-16 min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
+        <p className="text-xl text-red-500">Error loading movies: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -64,7 +76,7 @@ export default function Home() {
             className="absolute top-0 left-0 w-full h-full object-cover"
           >
             <source src="/video.mp4" type="video/mp4" />
-            Votre navigateur ne supporte pas la vidéo HTML5.
+            Your browser does not support HTML5 video.
           </video>
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-purple-900/40 to-transparent"></div>
           <div className="absolute inset-0 flex items-center justify-center text-center">

@@ -6,15 +6,42 @@ import { setSearchResults } from '../redux/moviesSlice';
 
 export default function Search() {
   const dispatch = useDispatch();
-  const { searchResults, addedMovies } = useSelector(state => state.movies);
+  // Get searchResults (from Redux for previous search results) and addedMovies (manually added)
+  // Also get 'movies' which are the API-fetched movies from the Redux store
+  const { searchResults, addedMovies, movies: apiMovies } = useSelector(state => state.movies);
+
+  // Combine all movies (API + manually added) for comprehensive suggestions
+  // Ensure we don't have duplicates if an API movie was also manually added with the same ID,
+  // preferring the manually added one if it matches the ID.
+  const allMovies = (() => {
+    const combined = [...(apiMovies || [])];
+    const uniqueIds = new Set(apiMovies.map(m => m.id));
+    for (const addedMovie of (addedMovies || [])) {
+      if (!uniqueIds.has(addedMovie.id)) {
+        combined.push(addedMovie);
+      } else {
+        // If an added movie has the same ID as an API movie, replace it (or decide which one to keep)
+        // For simplicity, we'll assume addedMovies might have new IDs or unique aspects.
+        // If IDs can collide, a more robust de-duplication based on original_id for API movies
+        // vs local ID for added movies might be needed. For now, simple ID check.
+        const existingIndex = combined.findIndex(m => m.id === addedMovie.id);
+        if (existingIndex !== -1) {
+          combined[existingIndex] = addedMovie; // Replace API movie with added movie if ID is same
+        }
+      }
+    }
+    return combined;
+  })();
+
+
   const [query, setQuery] = useState("");
   const [exactYear, setExactYear] = useState("");
   const [minRating, setMinRating] = useState("");
-  // selectedGenres remains an array to hold multiple genre IDs
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [genres, setGenres] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]); // New state for title suggestions
 
   // Load the list of genres on component mount
   useEffect(() => {
@@ -32,7 +59,41 @@ export default function Search() {
     fetchGenres();
   }, []);
 
+  // Handler for changes in the main search query input
+  const handleQueryChange = (e) => {
+    const newQuery = e.target.value;
+    setQuery(newQuery); // Update the query state
+
+    if (newQuery.trim().length > 0) {
+      const normalizedQuery = newQuery.trim().toLowerCase();
+      // Filter all movies for suggestions where title starts with the query
+      const filteredSuggestions = allMovies.filter(movie =>
+        movie.title && movie.title.toLowerCase().startsWith(normalizedQuery)
+      ).slice(0, 10); // Limit to top 10 suggestions for performance/UI
+      setSuggestions(filteredSuggestions);
+    } else {
+      setSuggestions([]); // Clear suggestions if query is empty
+    }
+    // Clear search results if query is empty to avoid stale results
+    if (newQuery.trim() === "") {
+        dispatch(setSearchResults([]));
+        setHasSearched(false);
+    }
+  };
+
+  // Handler for when a suggestion is clicked
+  const handleSuggestionClick = (suggestedTitle) => {
+    setQuery(suggestedTitle); // Set the query input to the clicked suggestion
+    setSuggestions([]); // Clear the suggestions list
+    // Optionally, trigger a full search immediately after selecting a suggestion
+    // handleSearch(); // Uncomment if you want immediate search on click
+  };
+
+
   const handleSearch = async () => {
+    // Clear suggestions when the main search is performed
+    setSuggestions([]);
+
     // Check if no query and no filters, clear results
     if (!query.trim() && !exactYear && !minRating && selectedGenres.length === 0) {
       dispatch(setSearchResults([]));
@@ -73,20 +134,22 @@ export default function Search() {
 
 
       // Combine API results with manually added movies
+      // Only include manually added movies if they match the query AND all filters
       let combined = [
         ...addedMovies.filter(m =>
-          // Filter added movies by query, year, rating, and ALL selected genres (if any)
           (query.trim() ? m.title.toLowerCase().includes(query.toLowerCase()) : true) &&
           (exactYear ? (m.release_date && m.release_date.slice(0, 4) === exactYear) : true) &&
           (minRating ? (m.vote_average >= parseFloat(minRating)) : true) &&
           // Check if movie has ANY of the selected genres
           (selectedGenres.length > 0 ? 
-             (m.genre_ids && selectedGenres.some(genreId => m.genre_ids.includes(parseInt(genreId)))) : true)
+              (m.genre_ids && selectedGenres.some(genreId => m.genre_ids.includes(parseInt(genreId)))) : true)
         ),
         ...apiResults
       ];
 
-      // Apply additional filters to API results if a query was used (as search API doesn't support them)
+      // Apply additional filters to API results if a query was used (as search API doesn't support them directly)
+      // Note: This filtering applies to `apiResults` *after* they are fetched,
+      // and only if a `query` was initially present.
       if (query.trim()) { 
         // Filter by exact year
         if (exactYear) {
@@ -102,7 +165,7 @@ export default function Search() {
           );
         }
 
-        // Filter by selected genres (if query was used)
+        // Filter by selected genres
         if (selectedGenres.length > 0) {
           combined = combined.filter(m => 
             m.genre_ids && selectedGenres.some(genreId => m.genre_ids.includes(parseInt(genreId)))
@@ -110,7 +173,7 @@ export default function Search() {
         }
       }
 
-      // Remove duplicates based on ID
+      // Remove duplicates based on ID (important when combining API and added movies)
       const uniqueMovies = combined.filter((movie, index, self) => 
         index === self.findIndex(m => m.id === movie.id)
       );
@@ -131,6 +194,7 @@ export default function Search() {
     setSelectedGenres([]); // Reset to empty array
     setHasSearched(false);
     setIsLoading(false);
+    setSuggestions([]); // Clear suggestions on reset
     dispatch(setSearchResults([]));
   };
 
@@ -143,9 +207,9 @@ export default function Search() {
     }
   }, [query, exactYear, minRating, selectedGenres]); // Add all filter dependencies here
 
-  // NEW: Helper function to handle individual checkbox changes
+  // Helper function to handle individual checkbox changes for genres
   const handleGenreCheckboxChange = (e) => {
-    const genreId = e.target.value;
+    const genreId = parseInt(e.target.value); // Ensure genreId is an integer
     const isChecked = e.target.checked;
 
     setSelectedGenres((prevSelectedGenres) => {
@@ -195,7 +259,7 @@ export default function Search() {
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
-              {/* Main Search Bar */}
+              {/* Main Search Bar and Suggestions */}
               <div className="relative mb-10 w-full">
                 <div className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-300"></div>
@@ -219,12 +283,27 @@ export default function Search() {
                       type="text" 
                       name="search" 
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      onChange={handleQueryChange} // Use the new handler for suggestions
                       className="h-16 w-full cursor-text rounded-xl border border-purple-500/30 bg-gray-800/60 py-4 pr-6 pl-14 shadow-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80 text-white placeholder-gray-400 transition-all duration-300 text-lg" 
                       placeholder="Search for amazing movies..."
                     />
                   </div>
                 </div>
+
+                {/* Suggestions List */}
+                {suggestions.length > 0 && query.trim().length > 0 && (
+                  <ul className="absolute z-20 w-full bg-gray-700/90 border border-purple-500/30 rounded-xl mt-2 max-h-60 overflow-y-auto shadow-xl backdrop-blur-md">
+                    {suggestions.map((movie) => (
+                      <li
+                        key={movie.id}
+                        className="p-3 text-gray-200 hover:bg-purple-700/50 cursor-pointer transition-colors duration-200 border-b border-gray-600/50 last:border-b-0"
+                        onClick={() => handleSuggestionClick(movie.title)}
+                      >
+                        {movie.title} ({movie.release_date ? movie.release_date.substring(0, 4) : 'N/A'})
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* Filters Section */}
@@ -294,7 +373,7 @@ export default function Search() {
                               type="checkbox"
                               id={`genre-${genre.id}`}
                               value={genre.id}
-                              checked={selectedGenres.includes(genre.id.toString())} // Ensure string comparison
+                              checked={selectedGenres.includes(genre.id)} // Check if genre.id (number) is in selectedGenres (array of numbers)
                               onChange={handleGenreCheckboxChange}
                               className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 rounded bg-gray-700 cursor-pointer"
                             />

@@ -7,10 +7,11 @@ export default function AddMovie() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Accéder aux données Redux
+  // Access Redux data
   const { addedMovies, movies } = useSelector(state => state.movies);
 
-  // Combiner tous les films (API + ajoutés manuellement).
+  // Combine all movies (API + manually added).
+  // This ensures that checkForTitleDuplicate accesses ALL movies.
   const allMovies = [...(movies || []), ...(addedMovies || [])];
 
   const [title, setTitle] = useState("");
@@ -53,15 +54,6 @@ export default function AddMovie() {
     });
   };
 
-  // ⚠️ Cette fonction est maintenue pour la complétude, mais n'est plus appelée
-  // pour afficher un message d'erreur si vous la supprimez du handleSubmit et handleImageChange.
-  // Si vous souhaitez la supprimer complètement, vous pouvez le faire.
-  const checkForImageDuplicate = (newImageBase64) => {
-    console.log('Checking for Base64 image duplicate against all movies...');
-    return allMovies.some(movie => movie.poster_path === newImageBase64);
-  };
-
-
   useEffect(() => {
     const fetchGenres = async () => {
       try {
@@ -96,25 +88,28 @@ export default function AddMovie() {
   }, []);
 
   useEffect(() => {
-    // Le message d'erreur lié à l'image n'est plus vérifié ici, car il est supprimé
-    if (error && !error.includes("title already exists")) { // Modifié pour ne pas vérifier l'erreur d'image ici
+    // Clear errors not related to duplicate titles when title changes
+    // or when other fields are modified, unless the current error is a duplicate title.
+    if (error && !error.includes("title already exists")) {
       setError("");
     }
 
+    // Real-time title duplicate check
     if (title.trim().length >= 2) {
       const isDuplicate = checkForTitleDuplicate(title);
       if (isDuplicate) {
-        setError("⚠️ Un film avec ce titre existe déjà dans votre collection !");
+        setError("⚠️ A movie with this title already exists in your collection!");
       } else {
+        // Clear title error if title is no longer a duplicate
         if (error.includes("title already exists")) {
             setError("");
         }
       }
     }
-  }, [title, allMovies, error]);
+  }, [title, allMovies, error]); // Dependencies updated to react to title or movie list changes
 
   const handleImageChange = (e) => {
-    setError(""); // Effacer les erreurs précédentes lors de la sélection d'une nouvelle image
+    setError(""); // Clear previous errors when selecting a new image
     const file = e.target.files[0];
     if (!file) {
         setImage(null);
@@ -124,10 +119,10 @@ export default function AddMovie() {
     }
 
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-    const maxSize = 3 * 1024 * 1024;
+    const maxSize = 3 * 1024 * 1024; // 3 MB
 
     if (!allowedTypes.includes(file.type)) {
-      setError("❌ Format invalide. Veuillez utiliser .png ou .jpg");
+      setError("❌ Invalid format. Please use .png or .jpg");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -135,7 +130,7 @@ export default function AddMovie() {
     }
 
     if (file.size > maxSize) {
-      setError("❌ Image trop grande (max 3 Mo).");
+      setError("❌ Image too large (max 3 MB).");
       setImage(null);
       setImageName("No file chosen");
       setImagePreview(null);
@@ -149,8 +144,7 @@ export default function AddMovie() {
     reader.onload = () => {
       const imageBase64 = reader.result;
       setImagePreview(imageBase64);
-      // ⚠️ La vérification de doublon d'image en temps réel a été retirée ici
-      // pour permettre l'ajout même si le poster est le même.
+      // Image duplicate check is intentionally omitted here.
     };
     reader.readAsDataURL(file);
   };
@@ -161,8 +155,9 @@ export default function AddMovie() {
         ? prev.filter(id => id !== genreId)
         : [...prev, genreId]
     );
+    // Clear "Please select at least one genre" error if a genre is selected
     if (selectedGenres.length === 0 && error.includes("select at least one genre")) {
-        setError("");
+      setError("");
     }
   };
 
@@ -171,78 +166,80 @@ export default function AddMovie() {
     setError("");
     setMessage("");
 
+    // --- Required field validation ---
     if (!title.trim()) {
-      setError("❗ Le titre du film est requis.");
+      setError("❗ Movie title is required.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!description.trim()) {
-      setError("❗ La description du film est requise.");
+      setError("❗ Movie description is required.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!releaseDate) {
-      setError("❗ La date de sortie est requise.");
+      setError("❗ Release date is required.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!duration) {
-      setError("❗ La durée du film est requise.");
+      setError("❗ Movie duration is required.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    
+
     if (selectedGenres.length === 0) {
-      setError("❗ Veuillez sélectionner au moins un genre.");
+      setError("❗ Please select at least one genre.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!image) {
-      setError("❗ Veuillez choisir une image pour le film.");
+      setError("❗ Please choose an image for the movie.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+    // --- End of required field validation ---
 
+
+    // ⭐ Title duplicate check BEFORE final addition ⭐
     if (checkForTitleDuplicate(title)) {
-        setError("🚫 Un film avec ce titre existe déjà dans votre collection !");
+        setError("🚫 A movie with this title already exists in your collection!");
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
+        return; // Prevent addition if title is a duplicate
     }
-
 
     const reader = new FileReader();
     reader.onload = () => {
       const imageBase64 = reader.result;
 
-      // ⚠️ La vérification de doublon d'image avant l'ajout a été retirée ici.
-      // Le film sera ajouté même si l'image est un doublon.
-      
       const newMovie = {
-        id: Date.now(),
+        id: Date.now(), // Use Date.now() for a simple unique ID
         title: title.trim(),
         overview: description.trim(),
         release_date: releaseDate,
         runtime: parseInt(duration),
         genre_ids: selectedGenres,
-        vote_average: rating ? parseFloat(rating) : 0,
+        vote_average: rating ? parseFloat(rating) : 0, // Convert to float
         poster_path: imageBase64,
-        backdrop_path: imageBase64,
-        created_at: new Date().toISOString(),
-        isCustom: true
+        backdrop_path: imageBase64, // Use the same image for the backdrop for simplicity
+        created_at: new Date().toISOString(), // Movie creation date
+        isCustom: true // Mark as a user-added movie
       };
 
       try {
         console.log('Attempting to add movie:', newMovie.title);
 
+        // Dispatch Redux action to add the movie
         dispatch(addMovie(newMovie));
 
-        setMessage("✅ Film ajouté avec succès !");
-        setError("");
+        setMessage("✅ Movie added successfully!");
+        setError(""); // Ensure no error remains displayed
 
+        // Reset fields after success
         setTitle("");
         setDescription("");
         setReleaseDate("");
@@ -253,25 +250,30 @@ export default function AddMovie() {
         setImageName("No file chosen");
         setImagePreview(null);
 
+        // Redirect after a short delay
         setTimeout(() => {
-          setMessage("🎬 Redirection vers l'accueil...");
+          setMessage("🎬 Redirecting to home...");
           setTimeout(() => {
-            navigate('/');
+            navigate('/'); // Redirects to the home page
           }, 1000);
         }, 2000);
 
       } catch (saveError) {
         console.error('Error saving movie:', saveError);
-        setError("❌ Erreur lors de la sauvegarde du film. Veuillez réessayer.");
+        setError("❌ Error saving movie. Please try again.");
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
 
-    reader.readAsDataURL(image);
+    // Read the image as a Base64 data URL if an image is selected
+    // This part is executed after all initial validations
+    if (image) {
+        reader.readAsDataURL(image);
+    }
   };
 
   const handleCancel = () => {
-    navigate('/');
+    navigate('/'); // Returns to the home page
   };
 
   return (
@@ -348,7 +350,7 @@ export default function AddMovie() {
                       placeholder="e.g. Inception"
                       required
                       className={`block w-full rounded-xl border px-4 py-3 shadow-lg outline-none text-white placeholder-gray-400 transition-all duration-300 ${
-                        error.includes("title already exists")
+                        error.includes("title already exists") // Check title error here for styling
                           ? 'border-red-500/50 bg-red-900/20 focus:border-red-400 focus:ring-2 focus:ring-red-400/30'
                           : 'border-purple-500/30 bg-gray-800/60 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 focus:bg-gray-800/80'
                       }`}
@@ -520,7 +522,7 @@ export default function AddMovie() {
                   </button>
                   <button
                     type="submit"
-                    // Désactiver le bouton si une erreur de titre dupliqué ou des erreurs de validation sont présentes
+                    // Disable button if a duplicate title error or validation errors are present
                     disabled={!!error || !title.trim() || !description.trim() || !releaseDate || !duration || !image || selectedGenres.length === 0}
                     className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl ${
                         (!!error || !title.trim() || !description.trim() || !releaseDate || !duration || !image || selectedGenres.length === 0)
