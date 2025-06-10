@@ -1,70 +1,89 @@
-Projet: Gestionnaire de Films (React Web App)
-Introduction
+# Projet: Gestionnaire de Films (React Web App)
+
+## Introduction
+
 Ce projet est une application web de gestion de films développée avec React.js. Il a été conçu pour évaluer les compétences en React, notamment la gestion des routes, la création de formulaires, la connexion à des APIs externes et la gestion de l'état global avec Redux.
 
-Fonctionnalités
+## Fonctionnalités
+
 L'application offre les fonctionnalités suivantes :
 
-Accueil (/) : Affiche une liste de films populaires récupérés depuis l'API The Movie Database (TMDb). Les films ajoutés manuellement sont également intégrés et affichés en premier sur la page d'accueil.
+* **Accueil (`/`)** : Affiche une liste de films populaires récupérés depuis l'API The Movie Database (TMDb). Les films ajoutés manuellement sont également intégrés et affichés en premier sur la page d'accueil.
 
-Recherche (/recherche) : Permet aux utilisateurs de rechercher des films en saisissant un mot-clé. Des filtres avancés par année de sortie, note minimale et genre sont également disponibles. Une fonctionnalité de suggestion de titres en temps réel est implémentée pour aider l'utilisateur lors de la saisie.
+* **Recherche (`/recherche`)** : Permet aux utilisateurs de rechercher des films en saisissant un mot-clé. Des filtres avancés par année de sortie, note minimale et genre sont également disponibles. Une fonctionnalité de suggestion de titres en temps réel est implémentée pour aider l'utilisateur lors de la saisie.
 
-Ajouter un film (/ajouter) : Contient un formulaire pour ajouter de nouveaux films à la collection de l'utilisateur. Le formulaire inclut les champs pour le titre, la description, la date de sortie, la durée, le classement, les genres et une image (poster). Une validation en temps réel vérifie si un film avec le même titre existe déjà (dans les films de l'API ou ajoutés manuellement).
+* **Ajouter un film (`/ajouter`)** : Contient un formulaire pour ajouter de nouveaux films à la collection de l'utilisateur. Le formulaire inclut les champs pour le titre, la description, la date de sortie, la durée, le classement, les genres et une image (poster). Une validation en temps réel vérifie si un film avec le même titre existe déjà (dans les films de l'API ou ajoutés manuellement).
 
-Détails du film (/film/:id) : Affiche les informations détaillées d'un film sélectionné.
+* **Détails du film (`/film/:id`)** : Affiche les informations détaillées d'un film sélectionné.
 
-Spécifications Techniques
-Framework : React.js
+## Spécifications Techniques
 
-Initialisation du projet : Créé avec VITE
+* **Framework** : React.js
 
-Gestion des routes : React Router
+* **Initialisation du projet** : Créé avec VITE
 
-Appels API : axios (utilisé pour les requêtes vers l'API TMDb)
+* **Gestion des routes** : React Router
 
-Gestion de l'état global : Redux Toolkit (avec moviesSlice pour gérer l'état des films API et des films ajoutés par l'utilisateur, ainsi que les résultats de recherche).
+* **Appels API** : `axios` (utilisé pour les requêtes vers l'API TMDb)
 
-Styling : Tailwind CSS pour un design réactif et moderne.
+* **Gestion de l'état global** : Redux Toolkit (avec `moviesSlice` pour gérer l'état des films API et des films ajoutés par l'utilisateur, ainsi que les résultats de recherche).
 
-Stockage local : localStorage est utilisé pour persister les films ajoutés manuellement par l'utilisateur.
+* **Styling** : Tailwind CSS pour un design réactif et moderne.
 
-Installation et Lancement
+* **Stockage local** : `localStorage` est utilisé pour persister les films ajoutés manuellement par l'utilisateur.
+
+## Installation et Lancement
+
 Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
 
-Cloner le dépôt (si hébergé sur GitHub, ce projet est privé selon la documentation, donc assurez-vous d'avoir les permissions nécessaires) :
+1. **Cloner le dépôt** (si hébergé sur GitHub, ce projet est privé selon la documentation, donc assurez-vous d'avoir les permissions nécessaires) :
 
-git clone VOTRE_LIEN_GITHUB_DU_PROJET
-cd nom-du-repertoire-du-projet
+   ```
+   git clone VOTRE_LIEN_GITHUB_DU_PROJET
+   cd nom-du-repertoire-du-projet
+   
+   ```
 
-Installer les dépendances :
+2. **Installer les dépendances** :
 
-npm install
-# ou
-yarn install
+   ```
+   npm install
+   # ou
+   yarn install
+   
+   ```
 
-Configuration de l'API TMDb :
+3. **Configuration de l'API TMDb** :
 
-Créez un compte sur The Movie Database (TMDb).
+   * Créez un compte sur [The Movie Database (TMDb)](https://www.themoviedb.org/).
 
-Obtenez votre clé API v3.
+   * Obtenez votre clé API v3.
 
-Créez un fichier .env (ou .env.local) à la racine de votre projet.
+   * Créez un fichier `.env` (ou `.env.local`) à la racine de votre projet.
 
-Ajoutez votre clé API comme suit :
+   * Ajoutez votre clé API comme suit :
 
-VITE_TMDB_API_KEY=VOTRE_CLE_API_TMDB_ICI
+     ```
+     VITE_TMDB_API_KEY=VOTRE_CLE_API_TMDB_ICI
+     
+     ```
 
-Assurez-vous de remplacer VOTRE_CLE_API_TMDB_ICI par votre véritable clé API.
+     Assurez-vous de remplacer `VOTRE_CLE_API_TMDB_ICI` par votre véritable clé API.
 
-Lancer l'application en mode développement :
+4. **Lancer l'application en mode développement** :
 
-npm run dev
-# ou
-yarn dev
+   ```
+   npm run dev
+   # ou
+   yarn dev
+   
+   ```
 
-L'application sera accessible à l'adresse http://localhost:5173 (ou un autre port disponible).
+   L'application sera accessible à l'adresse `http://localhost:5173` (ou un autre port disponible).
 
-Structure des dossiers clés
+## Structure des dossiers clés
+
+```
 ./
 ├── public/
 │   └── video.mp4     # Vidéo d'arrière-plan pour la page d'accueil
@@ -87,38 +106,30 @@ Structure des dossiers clés
 └── .env                  # Fichier d'environnement pour les clés API
 └── README.md             # Ce fichier
 
-Fonctionnalités Implémentées et Points Clés
-Gestion de l'état avec Redux Toolkit :
+```
 
-Le moviesSlice gère deux listes de films : movies (provenant de l'API) et addedMovies (ajoutés manuellement).
+## Fonctionnalités Implémentées et Points Clés
 
-L'action asynchrone fetchMovies charge les films populaires de TMDb dans le store Redux.
+* **Gestion de l'état avec Redux Toolkit** :
 
-addedMovies est persisté dans localStorage.
+  * Le `moviesSlice` gère deux listes de films : `movies` (provenant de l'API) et `addedMovies` (ajoutés manuellement).
 
-Détection de doublons de titres :
+  * L'action asynchrone `fetchMovies` charge les films populaires de TMDb dans le store Redux.
 
-Sur la page AddMovie, une vérification est effectuée en temps réel et lors de la soumission pour s'assurer qu'aucun film avec le même titre n'existe déjà dans l'ensemble de la collection (API + manuels).
+  * `addedMovies` est persisté dans `localStorage`.
 
-Recherche avancée avec suggestions :
+* **Détection de doublons de titres** :
 
-La page Search permet la recherche par titre, année, note et genres.
+  * Sur la page `AddMovie`, une vérification est effectuée en temps réel et lors de la soumission pour s'assurer qu'aucun film avec le même titre n'existe déjà dans l'ensemble de la collection (API + manuels).
 
-Des suggestions de titres apparaissent dynamiquement lors de la saisie, basées sur tous les films disponibles dans l'application.
+* **Recherche avancée avec suggestions** :
 
-Pagination : La page d'accueil implémente une pagination pour une meilleure gestion de l'affichage des films.
+  * La page `Search` permet la recherche par titre, année, note et genres.
 
-Design Réactif : L'interface utilisateur est conçue pour être agréable et fonctionnelle sur différentes tailles d'écran grâce à Tailwind CSS.
+  * Des suggestions de titres apparaissent dynamiquement lors de la saisie, basées sur tous les films disponibles dans l'application.
 
-Livrables Supplémentaires
-Conformément à la documentation du projet :
+* **Pagination** : La page d'accueil implémente une pagination pour une meilleure gestion de l'affichage des films.
 
-Rapport PDF : Un rapport PDF est requis pour présenter les fonctionnalités principales. Il doit contenir :
+* **Design Réactif** : L'interface utilisateur est conçue pour être agréable et fonctionnelle sur différentes tailles d'écran grâce à Tailwind CSS.
 
-Votre nom et prénom.
 
-Le lien du dépôt GitHub (Projet Privé).
-
-Une présentation détaillée des fonctionnalités réalisées.
-
-J'espère que ce README sera très utile pour votre projet !
