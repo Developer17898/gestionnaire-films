@@ -54,10 +54,8 @@ Suivez ces étapes pour installer et lancer le projet sur votre machine locale :
    ```
 
 3.  **Installer Tailwind CSS** :
-
-    Puisque votre configuration Tailwind CSS (`tailwind.config.js`, `postcss.config.js` et les directives dans `index.css`) est déjà en place, il vous suffit d'installer les paquets nécessaires :
-
-    ```bash
+   
+    ```
     npm install -D tailwindcss postcss autoprefixer
     # ou
     yarn add -D tailwindcss postcss autoprefixer
